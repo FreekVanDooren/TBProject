@@ -17,14 +17,29 @@ func CreateMemories() Memories {
 }
 
 func (memories *Memories) Update(number int) {
-	if (*memories)[number] == nil {
-		(*memories)[number] = &Memory{0, primes.IsPrime(number)}
+	m := *memories
+	var count int
+	var isPrime bool
+	if m[number] == nil {
+		count = 1
+		isPrime = primes.IsPrime(number)
+	} else {
+		count = m[number].Count + 1
+		isPrime = m[number].IsPrime
 	}
-	(*memories)[number].update()
+	m[number] = &Memory{Count: count, IsPrime: isPrime}
 }
 
-func (memories *Memories) ToPrimeResponse(number int) responses.Prime {
+func (memories *Memories) ToPrimeResponse(number int) responses.Primes {
 	return (*memories)[number].ToPrimeResponse()
+}
+
+func (memories *Memories) ToHistoryResponse() responses.History {
+	var requests []responses.Request
+	for number, memory := range *memories {
+		requests = append(requests, responses.Request{Number: number, Count: memory.Count})
+	}
+	return responses.History{Requests: requests}
 }
 
 func (m *Memory) update() {
@@ -41,6 +56,6 @@ func (m *Memory) toMessage() string {
 	return "No"
 }
 
-func (m *Memory) ToPrimeResponse() responses.Prime {
-	return responses.Prime{IsPrime: m.IsPrime, Message: m.toMessage()}
+func (m *Memory) ToPrimeResponse() responses.Primes {
+	return responses.Primes{IsPrime: m.IsPrime, Message: m.toMessage()}
 }

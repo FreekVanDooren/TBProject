@@ -42,10 +42,10 @@ func TestIsPrime(t *testing.T) {
 
 	primeCases := []struct {
 		number   int
-		expected responses.Prime
+		expected responses.Primes
 	}{
-		{number: 2, expected: responses.Prime{IsPrime: true, Message: "It is prime. Hurray!"}},
-		{number: 22, expected: responses.Prime{IsPrime: false, Message: "No"}},
+		{number: 2, expected: responses.Primes{IsPrime: true, Message: "It is prime. Hurray!"}},
+		{number: 22, expected: responses.Primes{IsPrime: false, Message: "No"}},
 	}
 
 	for _, primeCase := range primeCases {
@@ -68,7 +68,7 @@ func TestMessageNotChangeOnRepetitionWithPrime(t *testing.T) {
 		response := doGETRequest(t, fmt.Sprintf("%s/primes/%d", server.URL, 23))
 		defer response.Body.Close()
 
-		assertIsPrimeResponse(t, response, responses.Prime{IsPrime: true, Message: "It is prime. Hurray!"})
+		assertIsPrimeResponse(t, response, responses.Primes{IsPrime: true, Message: "It is prime. Hurray!"})
 	})
 }
 
@@ -87,14 +87,62 @@ func TestMessageChangeOnRepetitionWithNonPrime(t *testing.T) {
 			response := doGETRequest(t, fmt.Sprintf("%s/primes/%d", server.URL, repeatMessage.number))
 			defer response.Body.Close()
 
-			assertIsPrimeResponse(t, response, responses.Prime{IsPrime: false, Message: repeatMessage.message})
+			assertIsPrimeResponse(t, response, responses.Primes{IsPrime: false, Message: repeatMessage.message})
 		})
+	}
+}
+
+func TestHistoryHandler(t *testing.T) {
+	memories := memory.Memories{4: {1, false}, 6: {2, false}, 97: {100, true}}
+	server := setupServer(memories)
+	defer server.Close()
+
+	response := doGETRequest(t, fmt.Sprintf("%s/history/", server.URL))
+	defer response.Body.Close()
+
+	assertStatus200(t, response)
+	assertJsonHeader(t, response)
+
+	var actual responses.History
+	err := json.NewDecoder(response.Body).Decode(&actual)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := responses.History{
+		Requests: []responses.Request{
+			{Number: 4, Count: 1},
+			{Number: 6, Count: 2},
+			{Number: 97, Count: 100},
+		},
+	}
+
+	assertFailure := func() {
+		t.Errorf("Expected body %+v, but got %+v", expected, actual)
+	}
+
+	// Don't know why, but sometimes the comparison of the complete History struct fails, so rolled my own
+	if len(actual.Requests) != len(expected.Requests) {
+		assertFailure()
+	}
+	isInExpected := func(request responses.Request) bool {
+		for _, expectedRequest := range expected.Requests {
+			if expectedRequest == request {
+				return true
+			}
+		}
+		return false
+	}
+	for _, actualRequest := range actual.Requests {
+		if !isInExpected(actualRequest) {
+			assertFailure()
+		}
 	}
 }
 
 func setupServer(memories ...memory.Memories) *httptest.Server {
 	if memories == nil {
-		return httptest.NewServer(setupRouter(make(memory.Memories)))
+		return httptest.NewServer(setupRouter(memory.CreateMemories()))
 	}
 	return httptest.NewServer(setupRouter(memories[0]))
 }
@@ -111,9 +159,9 @@ func doGETRequest(t *testing.T, requestPath string) *http.Response {
 	return response
 }
 
-func assertIsPrimeResponse(t *testing.T, response *http.Response, expected responses.Prime) {
+func assertIsPrimeResponse(t *testing.T, response *http.Response, expected responses.Primes) {
 	assertStatus200(t, response)
-	var actual responses.Prime
+	var actual responses.Primes
 	err := json.NewDecoder(response.Body).Decode(&actual)
 	if err != nil {
 		t.Fatal(err)
@@ -123,14 +171,18 @@ func assertIsPrimeResponse(t *testing.T, response *http.Response, expected respo
 		t.Errorf("Expected body, but got %+v", actual)
 	}
 
-	header := response.Header.Get("Content-Type")
-	if header != "application/json" {
-		t.Errorf("Expected header, but got %q", header)
-	}
+	assertJsonHeader(t, response)
 }
 
 func assertStatus200(t *testing.T, response *http.Response) {
 	if response.StatusCode != 200 {
 		t.Errorf("Expected status code 200, but got \"%d\"", response.StatusCode)
+	}
+}
+
+func assertJsonHeader(t *testing.T, response *http.Response) {
+	header := response.Header.Get("Content-Type")
+	if header != "application/json" {
+		t.Errorf("Expected header, but got %q", header)
 	}
 }

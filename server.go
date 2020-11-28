@@ -15,9 +15,17 @@ func main() {
 
 func setupRouter(memories memory.Memories) *mux.Router {
 	r := mux.NewRouter()
+	r.StrictSlash(true)
 	r.HandleFunc("/", HomeHandler)
 	r.HandleFunc("/primes/{number:[0-9]+}", PrimeHandler(memories))
+	r.HandleFunc("/history", HistoryHandler(memories))
 	return r
+}
+
+func HistoryHandler(memories memory.Memories) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		respondAsJSON(w, memories.ToHistoryResponse())
+	}
 }
 
 func HomeHandler(w http.ResponseWriter, r *http.Request) {
@@ -37,8 +45,12 @@ func PrimeHandler(memories memory.Memories) func(w http.ResponseWriter, r *http.
 			return
 		}
 		memories.Update(number)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(memories.ToPrimeResponse(number))
+		respondAsJSON(w, memories.ToPrimeResponse(number))
 	}
+}
+
+func respondAsJSON(w http.ResponseWriter, response interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }
