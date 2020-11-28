@@ -16,9 +16,13 @@ func main() {
 func setupRouter(memories memory.Memories) *mux.Router {
 	r := mux.NewRouter()
 	r.StrictSlash(true)
-	r.HandleFunc("/", HomeHandler)
-	r.HandleFunc("/primes/{number:[0-9]+}", PrimeHandler(memories))
-	r.HandleFunc("/history", HistoryHandler(memories))
+	r.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Write([]byte("No can do"))
+	})
+	r.HandleFunc("/", HomeHandler).Methods(http.MethodGet)
+	r.HandleFunc("/primes/{number:[0-9]+}", PrimeHandler(memories)).Methods(http.MethodGet)
+	r.HandleFunc("/history", HistoryHandler(memories)).Methods(http.MethodGet)
 	return r
 }
 

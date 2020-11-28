@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"tbp.com/user/hello/memory"
 	"tbp.com/user/hello/responses"
 	"testing"
@@ -17,6 +19,7 @@ func TestServerUnknownPaths(t *testing.T) {
 
 	for _, path := range []string{
 		"/unknown",
+		"/primes",
 		"/primes/non-prime",
 	} {
 		t.Run("Does not know "+path, func(t *testing.T) {
@@ -92,7 +95,7 @@ func TestMessageChangeOnRepetitionWithNonPrime(t *testing.T) {
 	}
 }
 
-func TestHistoryHandler(t *testing.T) {
+func TestHistoryEndpoint(t *testing.T) {
 	memories := memory.Memories{4: {1, false}, 6: {2, false}, 97: {100, true}}
 	server := setupServer(memories)
 	defer server.Close()
@@ -140,6 +143,25 @@ func TestHistoryHandler(t *testing.T) {
 	}
 }
 
+func TestAllowsOnlyDefinedMethods(t *testing.T) {
+	server := setupServer()
+	defer server.Close()
+
+	testCases := []struct {
+		endpoint string
+	}{
+		{"/history"},
+		{"/"},
+		{"/primes/23"},
+	}
+	for _, testCase := range testCases {
+		response := doPOSTRequest(t, server.URL+testCase.endpoint)
+		if response.StatusCode != 405 {
+			t.Errorf("405 expected, but got %d", response.StatusCode)
+		}
+	}
+}
+
 func setupServer(memories ...memory.Memories) *httptest.Server {
 	if memories == nil {
 		return httptest.NewServer(setupRouter(memory.CreateMemories()))
@@ -148,7 +170,15 @@ func setupServer(memories ...memory.Memories) *httptest.Server {
 }
 
 func doGETRequest(t *testing.T, requestPath string) *http.Response {
-	request, err := http.NewRequest("GET", requestPath, nil)
+	return doRequest(t, requestPath, http.MethodGet, nil)
+}
+
+func doPOSTRequest(t *testing.T, requestPath string) *http.Response {
+	return doRequest(t, requestPath, http.MethodPost, strings.NewReader(""))
+}
+
+func doRequest(t *testing.T, requestPath string, method string, body io.Reader) *http.Response {
+	request, err := http.NewRequest(method, requestPath, body)
 	if err != nil {
 		t.Fatal(err)
 	}
