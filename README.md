@@ -1,15 +1,16 @@
-# Prerequisites
+# Usage
+## Prerequisites
 Go version 1.15 
-# Build
-```
-cd 
-go build
-```
-# Test
+## Test
 ```
 go test ./...
 ```
-# Run
+## Build
+```
+go build
+```
+## Run
+After build is done
 ```
 ./hello
 ```
