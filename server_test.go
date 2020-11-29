@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,7 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"tbp.com/user/hello/memory"
+	"tbp.com/user/hello/requests"
 	"tbp.com/user/hello/responses"
 	"testing"
 )
@@ -62,7 +63,7 @@ func TestIsPrime(t *testing.T) {
 }
 
 func TestMessageNotChangeOnRepetitionWithPrime(t *testing.T) {
-	server := setupServer(memory.Memories{
+	server := setupServer(requests.Memories{
 		23: {10, true},
 	})
 	defer server.Close()
@@ -76,7 +77,7 @@ func TestMessageNotChangeOnRepetitionWithPrime(t *testing.T) {
 }
 
 func TestMessageChangeOnRepetitionWithNonPrime(t *testing.T) {
-	memories := memory.Memories{4: {1, false}, 6: {2, false}}
+	memories := requests.Memories{4: {1, false}, 6: {2, false}}
 	server := setupServer(memories)
 	defer server.Close()
 
@@ -96,7 +97,7 @@ func TestMessageChangeOnRepetitionWithNonPrime(t *testing.T) {
 }
 
 func TestHistoryEndpoint(t *testing.T) {
-	memories := memory.Memories{4: {1, false}, 6: {2, false}, 97: {100, true}}
+	memories := requests.Memories{4: {1, false}, 6: {2, false}, 97: {100, true}}
 	server := setupServer(memories)
 	defer server.Close()
 
@@ -107,10 +108,7 @@ func TestHistoryEndpoint(t *testing.T) {
 	assertJsonHeader(t, response)
 
 	var actual responses.History
-	err := json.NewDecoder(response.Body).Decode(&actual)
-	if err != nil {
-		t.Fatal(err)
-	}
+	unmarshal(t, response, &actual)
 
 	expected := responses.History{
 		Requests: []responses.Request{
@@ -124,7 +122,8 @@ func TestHistoryEndpoint(t *testing.T) {
 		t.Errorf("Expected body %+v, but got %+v", expected, actual)
 	}
 
-	// Don't know why, but sometimes the comparison of the complete History struct fails, so rolled my own
+	// Don't know why, but sometimes the comparison of the complete
+	// History struct fails with reflect#DeepEqual(), so rolled my own
 	if len(actual.Requests) != len(expected.Requests) {
 		assertFailure()
 	}
@@ -155,16 +154,105 @@ func TestAllowsOnlyDefinedMethods(t *testing.T) {
 		{"/primes/23"},
 	}
 	for _, testCase := range testCases {
-		response := doPOSTRequest(t, server.URL+testCase.endpoint)
+		response := doPOSTRequest(t, server.URL+testCase.endpoint, strings.NewReader(""))
 		if response.StatusCode != 405 {
 			t.Errorf("405 expected, but got %d", response.StatusCode)
 		}
 	}
 }
 
-func setupServer(memories ...memory.Memories) *httptest.Server {
+func TestCurrentResponseMessages(t *testing.T) {
+	server := setupServer()
+	defer server.Close()
+
+	expected := responses.Messages{
+		Messages: []responses.Message{
+			{0, "No"},
+			{3, "No, and we already told you so!"},
+		},
+	}
+
+	response, actual := GETMessagesFromServer(t, server)
+	defer response.Body.Close()
+	if len(actual.Messages) != len(expected.Messages) {
+		t.Errorf("Expected body %+v, but got %+v", expected, actual)
+	}
+}
+
+func TestCanChangeResponseMessages(t *testing.T) {
+	server := setupServer(requests.Memories{
+		22: {8999, false},
+		24: {9000, false},
+	})
+	defer server.Close()
+
+	newMessages := responses.Messages{
+		Messages: []responses.Message{
+			{0, "No"},
+			{3, "No, and we already told you so!"},
+			{9001, "It's over 9000!"},
+		},
+	}
+
+	messageBytes, err := json.Marshal(newMessages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := doPOSTRequest(t, server.URL+"/messages", bytes.NewReader(messageBytes))
+	defer response.Body.Close()
+
+	if response.StatusCode != 202 {
+		t.Errorf("Expected status code 202, but got \"%d\"", response.StatusCode)
+	}
+
+	response, actualMessages := GETMessagesFromServer(t, server)
+	defer response.Body.Close()
+	if len(actualMessages.Messages) != len(newMessages.Messages) {
+		t.Errorf("Expected body %+v, but got %+v", newMessages, actualMessages)
+	}
+
+	response = doGETRequest(t, server.URL+"/primes/22")
+	defer response.Body.Close()
+
+	var primes22 responses.Primes
+	unmarshal(t, response, &primes22)
+
+	if primes22.Message != "No, and we already told you so!" {
+		t.Errorf("Expected message %q, but got %q", "No, and we already told you so!", primes22.Message)
+	}
+
+	response = doGETRequest(t, server.URL+"/primes/22")
+	defer response.Body.Close()
+
+	var primes24 responses.Primes
+	unmarshal(t, response, &primes24)
+
+	if primes24.Message != "It's over 9000!" {
+		t.Errorf("Expected message %q, but got %q", "It's over 9000!", primes24.Message)
+	}
+}
+
+func GETMessagesFromServer(t *testing.T, server *httptest.Server) (*http.Response, responses.Messages) {
+	response := doGETRequest(t, fmt.Sprintf("%s/messages/", server.URL))
+
+	assertStatus200(t, response)
+	assertJsonHeader(t, response)
+
+	var actual responses.Messages
+	unmarshal(t, response, &actual)
+	return response, actual
+}
+
+func unmarshal(t *testing.T, response *http.Response, actual interface{}) {
+	err := json.NewDecoder(response.Body).Decode(&actual)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func setupServer(memories ...requests.Memories) *httptest.Server {
 	if memories == nil {
-		return httptest.NewServer(setupRouter(memory.CreateMemories()))
+		return httptest.NewServer(setupRouter(requests.CreateMemories()))
 	}
 	return httptest.NewServer(setupRouter(memories[0]))
 }
@@ -173,8 +261,8 @@ func doGETRequest(t *testing.T, requestPath string) *http.Response {
 	return doRequest(t, requestPath, http.MethodGet, nil)
 }
 
-func doPOSTRequest(t *testing.T, requestPath string) *http.Response {
-	return doRequest(t, requestPath, http.MethodPost, strings.NewReader(""))
+func doPOSTRequest(t *testing.T, requestPath string, body io.Reader) *http.Response {
+	return doRequest(t, requestPath, http.MethodPost, body)
 }
 
 func doRequest(t *testing.T, requestPath string, method string, body io.Reader) *http.Response {
@@ -192,10 +280,7 @@ func doRequest(t *testing.T, requestPath string, method string, body io.Reader) 
 func assertIsPrimeResponse(t *testing.T, response *http.Response, expected responses.Primes) {
 	assertStatus200(t, response)
 	var actual responses.Primes
-	err := json.NewDecoder(response.Body).Decode(&actual)
-	if err != nil {
-		t.Fatal(err)
-	}
+	unmarshal(t, response, &actual)
 
 	if actual != expected {
 		t.Errorf("Expected body, but got %+v", actual)

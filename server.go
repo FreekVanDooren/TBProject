@@ -4,16 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
+	"io/ioutil"
 	"net/http"
 	"strconv"
-	"tbp.com/user/hello/memory"
+	"tbp.com/user/hello/messages"
+	"tbp.com/user/hello/requests"
+	"tbp.com/user/hello/responses"
 )
 
 func main() {
-	http.ListenAndServe(":8080", setupRouter(memory.CreateMemories()))
+	http.ListenAndServe(":8080", setupRouter(requests.CreateMemories()))
 }
 
-func setupRouter(memories memory.Memories) *mux.Router {
+func setupRouter(memories requests.Memories) *mux.Router {
 	r := mux.NewRouter()
 	r.StrictSlash(true)
 	r.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -21,15 +24,12 @@ func setupRouter(memories memory.Memories) *mux.Router {
 		w.Write([]byte("No can do"))
 	})
 	r.HandleFunc("/", HomeHandler).Methods(http.MethodGet)
-	r.HandleFunc("/primes/{number:[0-9]+}", PrimeHandler(memories)).Methods(http.MethodGet)
 	r.HandleFunc("/history", HistoryHandler(memories)).Methods(http.MethodGet)
+	feedbackMessages := messages.CreateMessages()
+	r.HandleFunc("/primes/{number:[0-9]+}", PrimeHandler(memories, feedbackMessages)).Methods(http.MethodGet)
+	r.HandleFunc("/messages", GETMessagesHandler(feedbackMessages)).Methods(http.MethodGet)
+	r.HandleFunc("/messages", POSTMessagesHandler(feedbackMessages)).Methods(http.MethodPost)
 	return r
-}
-
-func HistoryHandler(memories memory.Memories) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		respondAsJSON(w, memories.ToHistoryResponse())
-	}
 }
 
 func HomeHandler(w http.ResponseWriter, r *http.Request) {
@@ -37,23 +37,59 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Home!")
 }
 
-func PrimeHandler(memories memory.Memories) func(w http.ResponseWriter, r *http.Request) {
+func PrimeHandler(memories requests.Memories, feedbackMessages *messages.FeedbackMessages) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		potentialNumber := vars["number"]
 		number, err := strconv.Atoi(potentialNumber)
 		if err != nil {
 			fmt.Println(potentialNumber, "is not an integer.")
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "Not an integer: %s", potentialNumber)
+			http.Error(w, fmt.Sprintf("Not an integer: %s", potentialNumber), http.StatusBadRequest)
 			return
 		}
 		memories.Update(number)
-		respondAsJSON(w, memories.ToPrimeResponse(number))
+		sendAsJSONResponse(w, memories.ToPrimeResponse(number, feedbackMessages))
 	}
 }
 
-func respondAsJSON(w http.ResponseWriter, response interface{}) {
+func HistoryHandler(memories requests.Memories) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sendAsJSONResponse(w, memories.ToHistoryResponse())
+	}
+}
+
+func GETMessagesHandler(feedbackMessages *messages.FeedbackMessages) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sendAsJSONResponse(w, feedbackMessages.Get())
+	}
+}
+
+/*
+  Endpoint should have some security... We wouldn't want just anyone updating this.
+*/
+func POSTMessagesHandler(feedbackMessages *messages.FeedbackMessages) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var messages responses.Messages
+		err := json.NewDecoder(r.Body).Decode(&messages)
+		//defer r.Body.Close()
+		if err != nil {
+			if body, err := ioutil.ReadAll(r.Body); err == nil {
+				http.Error(w, fmt.Sprintf("Can't unmarshal request from %s", body), http.StatusBadRequest)
+			} else {
+				http.Error(w, "Can't read body", http.StatusBadRequest)
+			}
+			return
+		}
+		err = feedbackMessages.Update(messages)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+func sendAsJSONResponse(w http.ResponseWriter, response interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
