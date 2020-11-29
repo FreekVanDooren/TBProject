@@ -3,7 +3,9 @@ package repository
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
 	"os"
 )
 
@@ -42,6 +44,12 @@ func (p FileRepository) ReadAll(data interface{}) error {
 		}
 		defer jsonFile.Close()
 		err = json.NewDecoder(jsonFile).Decode(data)
+		if err == io.EOF {
+			log.Println(err)
+			// The file exists, but is empty, for some reason.
+			// Logging it to be on the safe side, so it can help to analyse if this happens a lot
+			return nil
+		}
 		return err
 	}
 	if os.IsNotExist(err) {
