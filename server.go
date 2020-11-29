@@ -36,13 +36,7 @@ func main() {
 }
 
 func ensureLogsDirectory() {
-	_, err := os.Stat("logs")
-	if os.IsNotExist(err) {
-		err := os.Mkdir("logs", 0755)
-		if err != nil {
-			panic(err)
-		}
-	}
+	err := os.MkdirAll("logs", 0755)
 	if err != nil {
 		panic(err)
 	}
