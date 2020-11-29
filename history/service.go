@@ -1,61 +1,50 @@
 package history
 
 import (
+	"log"
 	"tbp.com/user/hello/messages"
-	"tbp.com/user/hello/primes"
+	"tbp.com/user/hello/repository"
 	"tbp.com/user/hello/responses"
 )
 
-type Memories map[int]*Memory
-
-type Memory struct {
-	Count   int
-	IsPrime bool
+type Service struct {
+	repository repository.FileRepository
+	memories   Memories
 }
 
-func Setup() Memories {
-	return setupRepository()
-}
-
-func (memories *Memories) Update(number int) {
-	m := *memories
-	var count int
-	var isPrime bool
-	if m[number] == nil {
-		count = 1
-		isPrime = primes.IsPrime(number)
-	} else {
-		count = m[number].Count + 1
-		isPrime = m[number].IsPrime
+func Setup(folderName string) (Service, error) {
+	repository, err := repository.Initialize(folderName, "history")
+	var memories Memories
+	err = repository.ReadAll(&memories)
+	if memories == nil && err == nil {
+		memories = make(map[int]*Memory)
+		err = repository.Persist(memories)
 	}
-	m[number] = &Memory{Count: count, IsPrime: isPrime}
-
-	go persist(m)
+	service := Service{memories: memories, repository: repository}
+	return service, err
 }
 
-func (memories Memories) ToPrimeResponse(number int, messages *messages.FeedbackMessages) responses.Primes {
-	return memories[number].ToPrimeResponse(messages)
+func SetupWith(memories Memories, folderName string) (Service, error) {
+	repository, err := repository.Initialize(folderName, "history")
+	return Service{memories: memories, repository: repository}, err
 }
 
-func (memories Memories) ToHistoryResponse() responses.History {
-	var requests []responses.Request
-	for number, memory := range memories {
-		requests = append(requests, responses.Request{Number: number, Count: memory.Count})
+func (s Service) ToHistoryResponse() responses.History {
+	return s.memories.ToHistoryResponse()
+}
+
+func (s Service) Update(number int) {
+	s.memories.Update(number)
+	go s.persist()
+}
+
+func (s Service) ToPrimeResponse(number int, feedbackMessages *messages.Service) responses.Primes {
+	return s.memories.ToPrimeResponse(number, feedbackMessages)
+}
+
+func (s Service) persist() {
+	err := s.repository.Persist(s.memories)
+	if err != nil {
+		log.Println(err)
 	}
-	return responses.History{Requests: requests}
-}
-
-func (m Memory) update() {
-	m.Count = m.Count + 1
-}
-
-func (m Memory) toMessage(messages *messages.FeedbackMessages) string {
-	if m.IsPrime {
-		return "It is prime. Hurray!"
-	}
-	return messages.GetMessage(m.Count)
-}
-
-func (m Memory) ToPrimeResponse(messages *messages.FeedbackMessages) responses.Primes {
-	return responses.Primes{IsPrime: m.IsPrime, Message: m.toMessage(messages)}
 }

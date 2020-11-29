@@ -6,6 +6,10 @@ import (
 )
 
 func TestUpdatesOnlyWith0Present(t *testing.T) {
+	service, err := Setup("messages_test")
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Run("Updates without error when one default element present", func(t *testing.T) {
 		messages := responses.Messages{
 			Messages: []responses.Message{
@@ -13,7 +17,7 @@ func TestUpdatesOnlyWith0Present(t *testing.T) {
 				{3, "No, and we already told you so!"},
 			},
 		}
-		if CreateMessages().Update(messages) != nil {
+		if service.Update(messages) != nil {
 			t.Error("Expected no error")
 		}
 	})
@@ -23,7 +27,7 @@ func TestUpdatesOnlyWith0Present(t *testing.T) {
 				{3, "No, and we already told you so!"},
 			},
 		}
-		if CreateMessages().Update(messages) == nil {
+		if service.Update(messages) == nil {
 			t.Error("Expected an error")
 		}
 	})
@@ -35,7 +39,7 @@ func TestUpdatesOnlyWith0Present(t *testing.T) {
 				{3, "No, and we already told you so!"},
 			},
 		}
-		if CreateMessages().Update(messages) == nil {
+		if service.Update(messages) == nil {
 			t.Error("Expected an error")
 		}
 	})
@@ -47,7 +51,7 @@ func TestUpdatesOnlyWith0Present(t *testing.T) {
 				{3, "No, and we already told you so!"},
 			},
 		}
-		if CreateMessages().Update(messages) == nil {
+		if service.Update(messages) == nil {
 			t.Error("Expected an error")
 		}
 	})

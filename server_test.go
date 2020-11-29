@@ -8,14 +8,16 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"tbp.com/user/hello/history"
+	"tbp.com/user/hello/messages"
 	"tbp.com/user/hello/responses"
 	"testing"
 )
 
 func TestServerUnknownPaths(t *testing.T) {
-	server := setupServer()
+	server := setupServer(t)
 	defer server.Close()
 
 	for _, path := range []string{
@@ -41,7 +43,7 @@ func TestServerUnknownPaths(t *testing.T) {
 }
 
 func TestIsPrime(t *testing.T) {
-	server := setupServer()
+	server := setupServer(t)
 	defer server.Close()
 
 	primeCases := []struct {
@@ -63,7 +65,7 @@ func TestIsPrime(t *testing.T) {
 }
 
 func TestMessageNotChangeOnRepetitionWithPrime(t *testing.T) {
-	server := setupServer(history.Memories{
+	server := setupServer(t, history.Memories{
 		23: {10, true},
 	})
 	defer server.Close()
@@ -78,7 +80,7 @@ func TestMessageNotChangeOnRepetitionWithPrime(t *testing.T) {
 
 func TestMessageChangeOnRepetitionWithNonPrime(t *testing.T) {
 	memories := history.Memories{4: {1, false}, 6: {2, false}}
-	server := setupServer(memories)
+	server := setupServer(t, memories)
 	defer server.Close()
 
 	repeatMessages := []struct {
@@ -98,7 +100,7 @@ func TestMessageChangeOnRepetitionWithNonPrime(t *testing.T) {
 
 func TestHistoryEndpoint(t *testing.T) {
 	memories := history.Memories{4: {1, false}, 6: {2, false}, 97: {100, true}}
-	server := setupServer(memories)
+	server := setupServer(t, memories)
 	defer server.Close()
 
 	response := doGETRequest(t, fmt.Sprintf("%s/history/", server.URL))
@@ -143,7 +145,7 @@ func TestHistoryEndpoint(t *testing.T) {
 }
 
 func TestAllowsOnlyDefinedMethods(t *testing.T) {
-	server := setupServer()
+	server := setupServer(t)
 	defer server.Close()
 
 	testCases := []struct {
@@ -162,7 +164,7 @@ func TestAllowsOnlyDefinedMethods(t *testing.T) {
 }
 
 func TestCurrentResponseMessages(t *testing.T) {
-	server := setupServer()
+	server := setupServer(t)
 	defer server.Close()
 
 	expected := responses.Messages{
@@ -180,7 +182,7 @@ func TestCurrentResponseMessages(t *testing.T) {
 }
 
 func TestCanChangeResponseMessages(t *testing.T) {
-	server := setupServer(history.Memories{
+	server := setupServer(t, history.Memories{
 		22: {8999, false},
 		24: {9000, false},
 	})
@@ -250,11 +252,21 @@ func unmarshal(t *testing.T, response *http.Response, actual interface{}) {
 	}
 }
 
-func setupServer(memories ...history.Memories) *httptest.Server {
+func setupServer(t *testing.T, memories ...history.Memories) *httptest.Server {
+	testFolder := "test_data"
+	err := os.RemoveAll(testFolder)
+	messagesService, err := messages.Setup(testFolder)
+	var historyService history.Service
 	if memories == nil {
-		return httptest.NewServer(setupRouter(history.Setup()))
+		historyService, err = history.Setup(testFolder)
+	} else {
+		historyService, err = history.SetupWith(memories[0], testFolder)
 	}
-	return httptest.NewServer(setupRouter(memories[0]))
+	if err != nil {
+		t.Fatal(err)
+		return nil
+	}
+	return httptest.NewServer(setupRouter(historyService, messagesService))
 }
 
 func doGETRequest(t *testing.T, requestPath string) *http.Response {

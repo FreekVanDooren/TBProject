@@ -13,10 +13,18 @@ import (
 )
 
 func main() {
-	http.ListenAndServe(":8080", setupRouter(history.Setup()))
+	memories, err := history.Setup("data")
+	if err != nil {
+		panic(err)
+	}
+	feedbackMessages, err := messages.Setup("data")
+	if err != nil {
+		panic(err)
+	}
+	http.ListenAndServe(":8080", setupRouter(memories, feedbackMessages))
 }
 
-func setupRouter(memories history.Memories) *mux.Router {
+func setupRouter(memories history.Service, feedbackMessages *messages.Service) *mux.Router {
 	r := mux.NewRouter()
 	r.StrictSlash(true)
 	r.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +33,6 @@ func setupRouter(memories history.Memories) *mux.Router {
 	})
 	r.HandleFunc("/", HomeHandler).Methods(http.MethodGet)
 	r.HandleFunc("/history", HistoryHandler(memories)).Methods(http.MethodGet)
-	feedbackMessages := messages.CreateMessages()
 	r.HandleFunc("/primes/{number:[0-9]+}", PrimeHandler(memories, feedbackMessages)).Methods(http.MethodGet)
 	r.HandleFunc("/messages", GETMessagesHandler(feedbackMessages)).Methods(http.MethodGet)
 	r.HandleFunc("/messages", POSTMessagesHandler(feedbackMessages)).Methods(http.MethodPost)
@@ -37,7 +44,7 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Home!")
 }
 
-func PrimeHandler(memories history.Memories, feedbackMessages *messages.FeedbackMessages) func(w http.ResponseWriter, r *http.Request) {
+func PrimeHandler(memories history.Service, feedbackMessages *messages.Service) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		potentialNumber := vars["number"]
@@ -52,13 +59,13 @@ func PrimeHandler(memories history.Memories, feedbackMessages *messages.Feedback
 	}
 }
 
-func HistoryHandler(memories history.Memories) func(http.ResponseWriter, *http.Request) {
+func HistoryHandler(memories history.Service) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sendAsJSONResponse(w, memories.ToHistoryResponse())
 	}
 }
 
-func GETMessagesHandler(feedbackMessages *messages.FeedbackMessages) func(http.ResponseWriter, *http.Request) {
+func GETMessagesHandler(feedbackMessages *messages.Service) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sendAsJSONResponse(w, feedbackMessages.Get())
 	}
@@ -67,7 +74,7 @@ func GETMessagesHandler(feedbackMessages *messages.FeedbackMessages) func(http.R
 /*
   Endpoint should have some security... We wouldn't want just anyone updating this.
 */
-func POSTMessagesHandler(feedbackMessages *messages.FeedbackMessages) func(http.ResponseWriter, *http.Request) {
+func POSTMessagesHandler(feedbackMessages *messages.Service) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var messages responses.Messages
 		err := json.NewDecoder(r.Body).Decode(&messages)
