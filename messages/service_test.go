@@ -6,7 +6,7 @@ import (
 )
 
 func TestUpdatesOnlyWith0Present(t *testing.T) {
-	service, err := Setup("messages_test")
+	service, err := Setup("test_data")
 	if err != nil {
 		t.Fatal(err)
 	}

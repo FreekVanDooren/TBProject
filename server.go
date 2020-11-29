@@ -3,9 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"tbp.com/user/hello/history"
 	"tbp.com/user/hello/messages"
@@ -15,13 +19,36 @@ import (
 func main() {
 	memories, err := history.Setup("data")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	feedbackMessages, err := messages.Setup("data")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	http.ListenAndServe(":8080", setupRouter(memories, feedbackMessages))
+	logWriter, logFile := setupHttpLogWriter()
+	defer func() {
+		err := logFile.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	http.ListenAndServe(":8080", handlers.LoggingHandler(logWriter, setupRouter(memories, feedbackMessages)))
+}
+
+func setupHttpLogWriter() (io.Writer, *os.File) {
+	_, err := os.Stat("logs")
+	if os.IsNotExist(err) {
+		err := os.Mkdir("logs", 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	logFile, err := os.OpenFile("logs/http.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return io.MultiWriter(os.Stdout, logFile), logFile
 }
 
 func setupRouter(memories history.Service, feedbackMessages *messages.Service) *mux.Router {

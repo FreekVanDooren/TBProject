@@ -19,11 +19,12 @@ type Message struct {
 	Message    string `json:"message"`
 }
 
-type Messages struct {
-	Messages MessageSlice `json:"messages"`
-}
 type MessageSlice []Message
 
 func (ms MessageSlice) Len() int           { return len(ms) }
 func (ms MessageSlice) Less(i, j int) bool { return ms[i].LowerLimit > ms[j].LowerLimit }
 func (ms MessageSlice) Swap(i, j int)      { ms[i], ms[j] = ms[j], ms[i] }
+
+type Messages struct {
+	Messages MessageSlice `json:"messages"`
+}
