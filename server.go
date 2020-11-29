@@ -7,16 +7,16 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"tbp.com/user/hello/history"
 	"tbp.com/user/hello/messages"
-	"tbp.com/user/hello/requests"
 	"tbp.com/user/hello/responses"
 )
 
 func main() {
-	http.ListenAndServe(":8080", setupRouter(requests.CreateMemories()))
+	http.ListenAndServe(":8080", setupRouter(history.Setup()))
 }
 
-func setupRouter(memories requests.Memories) *mux.Router {
+func setupRouter(memories history.Memories) *mux.Router {
 	r := mux.NewRouter()
 	r.StrictSlash(true)
 	r.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +37,7 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Home!")
 }
 
-func PrimeHandler(memories requests.Memories, feedbackMessages *messages.FeedbackMessages) func(w http.ResponseWriter, r *http.Request) {
+func PrimeHandler(memories history.Memories, feedbackMessages *messages.FeedbackMessages) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		potentialNumber := vars["number"]
@@ -52,7 +52,7 @@ func PrimeHandler(memories requests.Memories, feedbackMessages *messages.Feedbac
 	}
 }
 
-func HistoryHandler(memories requests.Memories) func(http.ResponseWriter, *http.Request) {
+func HistoryHandler(memories history.Memories) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sendAsJSONResponse(w, memories.ToHistoryResponse())
 	}

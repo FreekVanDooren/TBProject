@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"tbp.com/user/hello/requests"
+	"tbp.com/user/hello/history"
 	"tbp.com/user/hello/responses"
 	"testing"
 )
@@ -63,7 +63,7 @@ func TestIsPrime(t *testing.T) {
 }
 
 func TestMessageNotChangeOnRepetitionWithPrime(t *testing.T) {
-	server := setupServer(requests.Memories{
+	server := setupServer(history.Memories{
 		23: {10, true},
 	})
 	defer server.Close()
@@ -77,7 +77,7 @@ func TestMessageNotChangeOnRepetitionWithPrime(t *testing.T) {
 }
 
 func TestMessageChangeOnRepetitionWithNonPrime(t *testing.T) {
-	memories := requests.Memories{4: {1, false}, 6: {2, false}}
+	memories := history.Memories{4: {1, false}, 6: {2, false}}
 	server := setupServer(memories)
 	defer server.Close()
 
@@ -97,7 +97,7 @@ func TestMessageChangeOnRepetitionWithNonPrime(t *testing.T) {
 }
 
 func TestHistoryEndpoint(t *testing.T) {
-	memories := requests.Memories{4: {1, false}, 6: {2, false}, 97: {100, true}}
+	memories := history.Memories{4: {1, false}, 6: {2, false}, 97: {100, true}}
 	server := setupServer(memories)
 	defer server.Close()
 
@@ -180,7 +180,7 @@ func TestCurrentResponseMessages(t *testing.T) {
 }
 
 func TestCanChangeResponseMessages(t *testing.T) {
-	server := setupServer(requests.Memories{
+	server := setupServer(history.Memories{
 		22: {8999, false},
 		24: {9000, false},
 	})
@@ -250,9 +250,9 @@ func unmarshal(t *testing.T, response *http.Response, actual interface{}) {
 	}
 }
 
-func setupServer(memories ...requests.Memories) *httptest.Server {
+func setupServer(memories ...history.Memories) *httptest.Server {
 	if memories == nil {
-		return httptest.NewServer(setupRouter(requests.CreateMemories()))
+		return httptest.NewServer(setupRouter(history.Setup()))
 	}
 	return httptest.NewServer(setupRouter(memories[0]))
 }

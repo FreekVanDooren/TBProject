@@ -1,4 +1,4 @@
-package requests
+package history
 
 import (
 	"tbp.com/user/hello/messages"
@@ -13,8 +13,8 @@ type Memory struct {
 	IsPrime bool
 }
 
-func CreateMemories() Memories {
-	return make(map[int]*Memory)
+func Setup() Memories {
+	return setupRepository()
 }
 
 func (memories *Memories) Update(number int) {
@@ -29,6 +29,8 @@ func (memories *Memories) Update(number int) {
 		isPrime = m[number].IsPrime
 	}
 	m[number] = &Memory{Count: count, IsPrime: isPrime}
+
+	go persist(m)
 }
 
 func (memories Memories) ToPrimeResponse(number int, messages *messages.FeedbackMessages) responses.Primes {
