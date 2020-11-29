@@ -10,10 +10,11 @@ go test ./...
 go build
 ```
 ## Run
-After build is done
+After build step
 ```
 ./hello
 ```
+Service is listening on port 8080
 # Endpoints
 | Method | Path |
 | ------ | ---- |
@@ -43,7 +44,7 @@ curl -H "application/json" -X POST localhost:8080/messages -d "{\"messages\":[{\
 * Validate POST to /messages to contain only benign data  
 * Figure out if there are any memory leaks
 * Rename to something else than "hello"
-* Figure out how to write cleaner code
+* Figure out how to write cleaner (test) code
 
 # Assignment
 Live coding
