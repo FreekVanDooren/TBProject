@@ -5,6 +5,8 @@ Go version 1.15
 ```
 go test ./...
 ```
+#### Artifacts
+Running tests will create `test_data`-folders
 ## Build
 ```
 go build
@@ -15,6 +17,8 @@ After build step
 ./hello
 ```
 Service is listening on port 8080
+#### Artifacts
+Running the service will create folders `data` and `logs`
 # Endpoints
 | Method | Path |
 | ------ | ---- |
@@ -45,6 +49,7 @@ curl -H "application/json" -X POST localhost:8080/messages -d "{\"messages\":[{\
 * Figure out if there are any memory leaks
 * Rename to something else than "hello"
 * Figure out how to write cleaner (test) code
+* Stop tests from creating folders or clean them up afterwards.
 
 # Assignment
 Live coding
